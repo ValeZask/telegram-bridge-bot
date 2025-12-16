@@ -123,8 +123,11 @@ async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: 
 
 async def start_timer(context: ContextTypes.DEFAULT_TYPE, sender_id: int, receiver_id: int):
     """Запускает таймер на 2 минуты"""
-    await asyncio.sleep(120)  # 2 минуты = 120 секунд
-    await send_buffered_messages(context, sender_id, receiver_id)
+    try:
+        await asyncio.sleep(120)  # 2 минуты = 120 секунд
+        await send_buffered_messages(context, sender_id, receiver_id)
+    except asyncio.CancelledError:
+        pass
 
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Пересылает сообщения между двумя пользователями"""
@@ -198,21 +201,18 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return
     
-    # Если отправитель - USER2, отправляем сразу с проверками
-    fake_error = False
-    error_message = ""
-    
+    # Если отправитель - USER2, проверяем лимиты ДО отправки
     if sender_id == USER2_ID:
         reset_counter_if_needed(sender_id)
         
         if message_counter.get(sender_id, 0) >= 5:
-            fake_error = True
-            error_message = "❌ Вы достигли ограничения, сообщение не было отправлено."
+            await update.message.reply_text("❌ Вы достигли ограничения, сообщение не было отправлено.")
+            return
         
         text_to_check = update.message.text or update.message.caption or ""
         if check_mat(text_to_check):
-            fake_error = True
-            error_message = "❌ Ваш текст содержит нецензурные слова, сообщение не было передано."
+            await update.message.reply_text("❌ Ваш текст содержит нецензурные слова, сообщение не было передано.")
+            return
         
         message_counter[sender_id] = message_counter.get(sender_id, 0) + 1
     
@@ -271,10 +271,7 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Этот тип сообщения пока не поддерживается.")
             return
         
-        if fake_error:
-            await update.message.reply_text(error_message)
-        else:
-            await update.message.reply_text("✅ Сообщение отправлено!")
+        await update.message.reply_text("✅ Сообщение отправлено!")
         
     except Exception as e:
         logging.error(f"Ошибка при пересылке сообщения: {e}")
@@ -294,28 +291,4 @@ def main():
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    # Запускаем Flask в отдельном потоке для Render
-    from flask import Flask
-    import threading
-    
-    app = Flask(__name__)
-    
-    @app.route('/')
-    def home():
-        return "Bot is running!", 200
-    
-    @app.route('/health')
-    def health():
-        return "OK", 200
-    
-    def run_flask():
-        port = int(os.getenv('PORT', 10000))
-        app.run(host='0.0.0.0', port=port)
-    
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Запускаем бота
     main()
