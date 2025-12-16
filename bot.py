@@ -30,7 +30,7 @@ message_buffer = {}
 timer_task = {}
 
 # Список матерных слов
-MAT_WORDS = [
+MAT_WORDS_LIST = [
     # Основные и производные от "бля"
     'блять', 'блядь', 'бля', 'блят', 'бляь', 'бляд', 'блядина', 'блядовать', 'блядский', 'блядство', 'бляха', 'блях', 'бля буду', 'бля буду', 'блятский', 'блятьна', 'блясть',
     
@@ -71,6 +71,9 @@ MAT_WORDS = [
     'shit', 'sh1t', 'sh!t', 'fuck', 'fucking', 'fucked', 'fucker', 'motherfucker', 'mf', 'bitch', 'bitches', 'ass', 'asshole', 'dick', 'd1ck', 'cock', 'c0ck', 'pussy', 'cunt', 'whore', 'slut', 'sl*t', 'bastard', 'damn', 'dammit', 'hell', 'wtf', 'wtff', 'fck', 'fuk', 'fukin', 'fuking', 'sht', 'shyt', 'b1tch', 'b@tch', 'a55', 'a55hole'
 ]
 
+# Преобразуем список в set для быстрого поиска O(1)
+MAT_WORDS = set(MAT_WORDS_LIST)
+
 def reset_counter_if_needed(user_id):
     """Сбрасывает счетчик если наступил новый день"""
     today = datetime.now().date()
@@ -80,13 +83,16 @@ def reset_counter_if_needed(user_id):
         last_reset_date[user_id] = today
 
 def check_mat(text):
-    """Проверяет текст на мат"""
+    """Проверяет текст на мат - оптимизированная версия"""
     if not text:
         return False
     
     text_lower = text.lower()
-    for word in MAT_WORDS:
-        if re.search(r'\b' + word + r'\b', text_lower):
+    # Разбиваем текст на слова и проверяем через set (O(1) вместо O(n*regex))
+    words = re.findall(r'\b\w+\b', text_lower)
+    
+    for word in words:
+        if word in MAT_WORDS:
             return True
     return False
 
