@@ -204,23 +204,33 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return
     
-    # Если отправитель - USER2, проверяем блокировку
+    # Если отправитель - USER2, проверяем блокировку и лимиты
     global user2_blocked
     if sender_id == USER2_ID:
         reset_counter_if_needed(sender_id)
         
-        # Если USER2 уже заблокирован, отправляем сообщение об ограничении
-        if user2_blocked:
-            await update.message.reply_text("❌ Вы достигли ограничения, сообщение не было отправлено.")
-            return
-        
         text_to_check = update.message.text or update.message.caption or ""
-        if check_mat(text_to_check):
+        has_mat = check_mat(text_to_check)
+        
+        # Проверяем наличие мата
+        if has_mat:
             # Отправляем уведомление USER2 о мате
             await update.message.reply_text("❌ Ваш текст содержит нецензурные слова, сообщение не было передано.")
-            # НО сообщение все равно отправляется USER1
+            # Блокируем USER2
             user2_blocked = True
-            # Продолжаем обработку для отправки USER1
+            # Сообщение все равно отправится USER1 (продолжаем выполнение)
+        
+        # Проверяем, уже ли USER2 заблокирован (после первого мата или 5 сообщений)
+        elif user2_blocked:
+            await update.message.reply_text("❌ Вы достигли ограничения, сообщение не было отправлено.")
+            # Сообщение все равно отправится USER1 (продолжаем выполнение)
+        
+        # Если не мат и не заблокирован - считаем сообщение
+        else:
+            message_counter[sender_id] = message_counter.get(sender_id, 0) + 1
+            # Проверяем, достигнут ли лимит в 5 сообщений
+            if message_counter[sender_id] >= 5:
+                user2_blocked = True
     
     try:
         # Отправляем сообщение сразу для USER2
