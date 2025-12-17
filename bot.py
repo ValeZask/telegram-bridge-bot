@@ -371,8 +371,10 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Этот тип сообщения пока не поддерживается.")
             return
         
-        # USER2 отправил сообщение - не нужно уведомление об успехе
-        # (потому что они либо видят, что сообщение содержит мат, либо достигли лимита)
+        # Отправляем подтверждение USER2 если сообщение было успешно отправлено
+        # (только если нет мата и не заблокирован)
+        if not has_mat and not user2_blocked:
+            await update.message.reply_text("✅ Сообщение отправлено!")
         
     except Exception as e:
         logging.error(f"Ошибка при пересылке сообщения: {e}")
