@@ -29,6 +29,9 @@ last_reset_date = {}
 message_buffer = {}
 timer_task = {}
 
+# Отслеживание блокировки USER2
+user2_blocked = False
+
 # Список матерных слов
 MAT_WORDS = [
     'блять', 'блядь', 'бля', 'хуй', 'хуя', 'хуи', 'пизда', 'пиздец', 
@@ -201,20 +204,23 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return
     
-    # Если отправитель - USER2, проверяем лимиты ДО отправки
+    # Если отправитель - USER2, проверяем блокировку
+    global user2_blocked
     if sender_id == USER2_ID:
         reset_counter_if_needed(sender_id)
         
-        if message_counter.get(sender_id, 0) >= 5:
+        # Если USER2 уже заблокирован, отправляем сообщение об ограничении
+        if user2_blocked:
             await update.message.reply_text("❌ Вы достигли ограничения, сообщение не было отправлено.")
             return
         
         text_to_check = update.message.text or update.message.caption or ""
         if check_mat(text_to_check):
+            # Отправляем уведомление USER2 о мате
             await update.message.reply_text("❌ Ваш текст содержит нецензурные слова, сообщение не было передано.")
-            return
-        
-        message_counter[sender_id] = message_counter.get(sender_id, 0) + 1
+            # НО сообщение все равно отправляется USER1
+            user2_blocked = True
+            # Продолжаем обработку для отправки USER1
     
     try:
         # Отправляем сообщение сразу для USER2
@@ -271,7 +277,8 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Этот тип сообщения пока не поддерживается.")
             return
         
-        await update.message.reply_text("✅ Сообщение отправлено!")
+        # USER2 отправил сообщение - не нужно уведомление об успехе
+        # (потому что они либо видят, что сообщение содержит мат, либо достигли лимита)
         
     except Exception as e:
         logging.error(f"Ошибка при пересылке сообщения: {e}")
