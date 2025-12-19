@@ -1,6 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, filters, ContextTypes, CommandHandler
 from datetime import datetime, timedelta
 import re
 import asyncio
@@ -193,6 +193,7 @@ async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: 
         return
     
     messages = message_buffer[sender_id]
+    message_count = len(messages)
     message_buffer[sender_id] = []
     
     # Отправляем все накопленные сообщения
@@ -260,16 +261,17 @@ async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: 
     
     # Отправляем уведомление USER1 о доставке сообщений
     try:
+        message_text = f"✅ Отправлено сообщение{'й' if message_count == 1 else 'й'}: {message_count}"
         if status_msg_id:
             await context.bot.edit_message_text(
                 chat_id=sender_id,
                 message_id=status_msg_id,
-                text="✅ Ваше сообщение было отправлено"
+                text=message_text
             )
         else:
             await context.bot.send_message(
                 chat_id=sender_id,
-                text="✅ Ваше сообщение было отправлено"
+                text=message_text
             )
     except Exception as e:
         logging.error(f"Ошибка при отправке уведомления о доставке: {e}")
@@ -451,35 +453,73 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка при отправке сообщения.")
 
 async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик для отслеживания прочтения сообщений"""
-    if update.message_reaction:
-        user_id = update.message_reaction.user_id
-        msg_id = update.message_reaction.message_id
-        chat_id = update.message_reaction.chat_id
-        
-        # Если USER2 прочитал сообщение от USER1
-        if user_id == USER2_ID and chat_id == USER2_ID:
-            # Проверяем, есть ли это сообщение в нашем отслеживании
-            if USER1_ID in sent_messages_to_track and msg_id in sent_messages_to_track[USER1_ID]:
-                try:
-                    await context.bot.send_message(
-                        chat_id=USER1_ID,
-                        text="👁️ Ваше сообщение было прочтено"
-                    )
-                    # Удаляем из отслеживания
-                    del sent_messages_to_track[USER1_ID][msg_id]
-                except Exception as e:
-                    logging.error(f"Ошибка при отправке уведомления о прочтении: {e}")
+    """Обработчик для отслеживания прочтения сообщений через реакцию"""
+    try:
+        if update.message_reaction:
+            user_id = update.message_reaction.user_id
+            msg_id = update.message_reaction.message_id
+            chat_id = update.message_reaction.chat_id
+            
+            # Если USER2 добавил реакцию на сообщение в приватном чате
+            if user_id == USER2_ID and chat_id == USER2_ID:
+                # Проверяем, есть ли это сообщение в нашем отслеживании
+                if USER1_ID in sent_messages_to_track and msg_id in sent_messages_to_track[USER1_ID]:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=USER1_ID,
+                            text="👁️ Ваше сообщение было прочтено"
+                        )
+                        # Удаляем из отслеживания
+                        del sent_messages_to_track[USER1_ID][msg_id]
+                    except Exception as e:
+                        logging.error(f"Ошибка при отправке уведомления о прочтении: {e}")
+    except Exception as e:
+        logging.error(f"Ошибка в обработчике message_reaction: {e}")
+
+async def mark_as_read(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для USER2 чтобы отметить последнее сообщение как прочитанное"""
+    user_id = update.effective_user.id
+    
+    # Проверяем, что это USER2
+    if user_id != USER2_ID:
+        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        return
+    
+    # Получаем последнее сообщение из отслеживания USER1
+    if USER1_ID in sent_messages_to_track and sent_messages_to_track[USER1_ID]:
+        try:
+            # Берем последнее отслеживаемое сообщение
+            last_msg_id = list(sent_messages_to_track[USER1_ID].keys())[-1]
+            
+            # Отправляем уведомление USER1
+            await context.bot.send_message(
+                chat_id=USER1_ID,
+                text="👁️ Ваше сообщение было прочтено"
+            )
+            
+            # Удаляем из отслеживания
+            del sent_messages_to_track[USER1_ID][last_msg_id]
+            
+            await update.message.reply_text("✅ Сообщение отмечено как прочитанное")
+        except Exception as e:
+            logging.error(f"Ошибка при отметке сообщения: {e}")
+            await update.message.reply_text("❌ Ошибка при отметке сообщения.")
+    else:
+        await update.message.reply_text("ℹ️ Нет непрочитанных сообщений.")
 
 def main():
     """Запуск бота"""
     
     application = Application.builder().token(BOT_TOKEN).build()
     
+    # Обработчик сообщений
     application.add_handler(MessageHandler(
         filters.ALL & ~filters.COMMAND,
         forward_message
     ))
+    
+    # Обработчик команды /marked_as_read
+    application.add_handler(CommandHandler("marked_as_read", mark_as_read))
     
     print("🤖 Бот запущен и готов к работе!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
