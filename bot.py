@@ -29,6 +29,10 @@ last_reset_date = {}
 message_buffer = {}
 timer_task = {}
 
+# Отслеживание отправленных сообщений для USER1
+sent_messages_to_track = {}  # Словарь {message_id: {receiver_id, sent: True}} для отслеживания доставки
+user1_status_messages = {}  # Словарь {timer_id: message_id} для отслеживания уведомлений USER1
+
 # Отслеживание блокировки USER2
 user2_blocked = False
 
@@ -100,6 +104,7 @@ MAT_WORDS = [
     'тупой', 'тупица', 'тупень',
     'спамер', 'спамеры', 'спамить',
     'троль', 'тролли', 'троллить',
+    'бок',
     
     # Английские матерные слова
     'shit', 'shitty', 'shitting',
@@ -181,7 +186,7 @@ def check_mat(text):
     
     return False
 
-async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: int, receiver_id: int):
+async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: int, receiver_id: int, status_msg_id: int = None):
     """Отправляет все накопленные сообщения"""
     
     if sender_id not in message_buffer or not message_buffer[sender_id]:
@@ -194,64 +199,90 @@ async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: 
     for msg_data in messages:
         try:
             msg_type = msg_data['type']
+            sent_msg = None
             
             if msg_type == 'text':
-                await context.bot.send_message(
+                sent_msg = await context.bot.send_message(
                     chat_id=receiver_id,
                     text=msg_data['text']
                 )
             elif msg_type == 'photo':
-                await context.bot.send_photo(
+                sent_msg = await context.bot.send_photo(
                     chat_id=receiver_id,
                     photo=msg_data['file_id'],
                     caption=msg_data.get('caption', '')
                 )
             elif msg_type == 'video':
-                await context.bot.send_video(
+                sent_msg = await context.bot.send_video(
                     chat_id=receiver_id,
                     video=msg_data['file_id'],
                     caption=msg_data.get('caption', '')
                 )
             elif msg_type == 'document':
-                await context.bot.send_document(
+                sent_msg = await context.bot.send_document(
                     chat_id=receiver_id,
                     document=msg_data['file_id'],
                     caption=msg_data.get('caption', '')
                 )
             elif msg_type == 'voice':
-                await context.bot.send_voice(
+                sent_msg = await context.bot.send_voice(
                     chat_id=receiver_id,
                     voice=msg_data['file_id']
                 )
             elif msg_type == 'audio':
-                await context.bot.send_audio(
+                sent_msg = await context.bot.send_audio(
                     chat_id=receiver_id,
                     audio=msg_data['file_id'],
                     caption=msg_data.get('caption', '')
                 )
             elif msg_type == 'sticker':
-                await context.bot.send_sticker(
+                sent_msg = await context.bot.send_sticker(
                     chat_id=receiver_id,
                     sticker=msg_data['file_id']
                 )
             elif msg_type == 'video_note':
-                await context.bot.send_video_note(
+                sent_msg = await context.bot.send_video_note(
                     chat_id=receiver_id,
                     video_note=msg_data['file_id']
                 )
+            
+            # Отслеживаем отправленное сообщение
+            if sent_msg:
+                if sender_id not in sent_messages_to_track:
+                    sent_messages_to_track[sender_id] = {}
+                sent_messages_to_track[sender_id][sent_msg.message_id] = {
+                    'receiver_id': receiver_id,
+                    'sent': True
+                }
                 
         except Exception as e:
             logging.error(f"Ошибка при отправке накопленного сообщения: {e}")
+    
+    # Отправляем уведомление USER1 о доставке сообщений
+    try:
+        if status_msg_id:
+            await context.bot.edit_message_text(
+                chat_id=sender_id,
+                message_id=status_msg_id,
+                text="✅ Ваше сообщение было отправлено"
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=sender_id,
+                text="✅ Ваше сообщение было отправлено"
+            )
+    except Exception as e:
+        logging.error(f"Ошибка при отправке уведомления о доставке: {e}")
     
     # Очищаем задачу таймера
     if sender_id in timer_task:
         del timer_task[sender_id]
 
-async def start_timer(context: ContextTypes.DEFAULT_TYPE, sender_id: int, receiver_id: int):
+async def start_timer(context: ContextTypes.DEFAULT_TYPE, sender_id: int, receiver_id: int, status_msg_id: int = None):
     """Запускает таймер на 2 минуты"""
     try:
         await asyncio.sleep(120)  # 2 минуты = 120 секунд
-        await send_buffered_messages(context, sender_id, receiver_id)
+        await send_buffered_messages(context, sender_id, receiver_id, status_msg_id)
     except asyncio.CancelledError:
         pass
 
@@ -318,12 +349,12 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Запускаем таймер если он еще не запущен
         if sender_id not in timer_task or timer_task[sender_id].done():
+            status_msg = await update.message.reply_text(f"⏳ Ваше сообщение добавлено в очередь. Будет отправлено через 2 минуты (всего в очереди: {len(message_buffer[sender_id])})")
             timer_task[sender_id] = asyncio.create_task(
-                start_timer(context, sender_id, receiver_id)
+                start_timer(context, sender_id, receiver_id, status_msg.message_id)
             )
-            await update.message.reply_text(f"⏳ Сообщение добавлено в очередь. Будет отправлено через 2 минуты (всего в очереди: {len(message_buffer[sender_id])})")
         else:
-            await update.message.reply_text(f"⏳ Сообщение добавлено в очередь (всего: {len(message_buffer[sender_id])})")
+            await update.message.reply_text(f"⏳ Ваше сообщение добавлено в очередь (всего: {len(message_buffer[sender_id])})")
         
         return
     
@@ -418,6 +449,27 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logging.error(f"Ошибка при пересылке сообщения: {e}")
         await update.message.reply_text("❌ Ошибка при отправке сообщения.")
+
+async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик для отслеживания прочтения сообщений"""
+    if update.message_reaction:
+        user_id = update.message_reaction.user_id
+        msg_id = update.message_reaction.message_id
+        chat_id = update.message_reaction.chat_id
+        
+        # Если USER2 прочитал сообщение от USER1
+        if user_id == USER2_ID and chat_id == USER2_ID:
+            # Проверяем, есть ли это сообщение в нашем отслеживании
+            if USER1_ID in sent_messages_to_track and msg_id in sent_messages_to_track[USER1_ID]:
+                try:
+                    await context.bot.send_message(
+                        chat_id=USER1_ID,
+                        text="👁️ Ваше сообщение было прочтено"
+                    )
+                    # Удаляем из отслеживания
+                    del sent_messages_to_track[USER1_ID][msg_id]
+                except Exception as e:
+                    logging.error(f"Ошибка при отправке уведомления о прочтении: {e}")
 
 def main():
     """Запуск бота"""
