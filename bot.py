@@ -29,10 +29,6 @@ last_reset_date = {}
 message_buffer = {}
 timer_task = {}
 
-# Отслеживание отправленных сообщений для USER1
-sent_messages_to_track = {}  # Словарь {message_id: {receiver_id, sent: True}} для отслеживания доставки
-user1_status_messages = {}  # Словарь {timer_id: message_id} для отслеживания уведомлений USER1
-
 # Отслеживание блокировки USER2
 user2_blocked = False
 
@@ -247,14 +243,9 @@ async def send_buffered_messages(context: ContextTypes.DEFAULT_TYPE, sender_id: 
                     video_note=msg_data['file_id']
                 )
             
-            # Отслеживаем отправленное сообщение
+            # Отслеживаем отправленное сообщение для будущих функций
             if sent_msg:
-                if sender_id not in sent_messages_to_track:
-                    sent_messages_to_track[sender_id] = {}
-                sent_messages_to_track[sender_id][sent_msg.message_id] = {
-                    'receiver_id': receiver_id,
-                    'sent': True
-                }
+                logging.info(f"Сообщение отправлено USER2, ID: {sent_msg.message_id}")
                 
         except Exception as e:
             logging.error(f"Ошибка при отправке накопленного сообщения: {e}")
@@ -453,59 +444,12 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Ошибка при отправке сообщения.")
 
 async def handle_message_reaction(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик для отслеживания прочтения сообщений через реакцию"""
-    try:
-        if update.message_reaction:
-            user_id = update.message_reaction.user_id
-            msg_id = update.message_reaction.message_id
-            chat_id = update.message_reaction.chat_id
-            
-            # Если USER2 добавил реакцию на сообщение в приватном чате
-            if user_id == USER2_ID and chat_id == USER2_ID:
-                # Проверяем, есть ли это сообщение в нашем отслеживании
-                if USER1_ID in sent_messages_to_track and msg_id in sent_messages_to_track[USER1_ID]:
-                    try:
-                        await context.bot.send_message(
-                            chat_id=USER1_ID,
-                            text="👁️ Ваше сообщение было прочтено"
-                        )
-                        # Удаляем из отслеживания
-                        del sent_messages_to_track[USER1_ID][msg_id]
-                    except Exception as e:
-                        logging.error(f"Ошибка при отправке уведомления о прочтении: {e}")
-    except Exception as e:
-        logging.error(f"Ошибка в обработчике message_reaction: {e}")
+    """Зарезервировано для будущих функций"""
+    pass
 
 async def mark_as_read(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда для USER2 чтобы отметить последнее сообщение как прочитанное"""
-    user_id = update.effective_user.id
-    
-    # Проверяем, что это USER2
-    if user_id != USER2_ID:
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
-        return
-    
-    # Получаем последнее сообщение из отслеживания USER1
-    if USER1_ID in sent_messages_to_track and sent_messages_to_track[USER1_ID]:
-        try:
-            # Берем последнее отслеживаемое сообщение
-            last_msg_id = list(sent_messages_to_track[USER1_ID].keys())[-1]
-            
-            # Отправляем уведомление USER1
-            await context.bot.send_message(
-                chat_id=USER1_ID,
-                text="👁️ Ваше сообщение было прочтено"
-            )
-            
-            # Удаляем из отслеживания
-            del sent_messages_to_track[USER1_ID][last_msg_id]
-            
-            await update.message.reply_text("✅ Сообщение отмечено как прочитанное")
-        except Exception as e:
-            logging.error(f"Ошибка при отметке сообщения: {e}")
-            await update.message.reply_text("❌ Ошибка при отметке сообщения.")
-    else:
-        await update.message.reply_text("ℹ️ Нет непрочитанных сообщений.")
+    """Зарезервировано для будущих функций"""
+    pass
 
 def main():
     """Запуск бота"""
@@ -517,9 +461,6 @@ def main():
         filters.ALL & ~filters.COMMAND,
         forward_message
     ))
-    
-    # Обработчик команды /marked_as_read
-    application.add_handler(CommandHandler("marked_as_read", mark_as_read))
     
     print("🤖 Бот запущен и готов к работе!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
