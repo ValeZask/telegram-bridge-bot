@@ -3,6 +3,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, CommandHandler
 from datetime import datetime, timedelta
 import re
+import random
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -133,6 +134,25 @@ MAT_WORDS = [
     'assclown', 'assclowns',
     'arse',
     'bollocks'
+]
+
+# Список забавных ответов при обнаружении мата у USER2
+HUMOROUS_REPLIES = [
+    "Ай-ай-ай, плохой ты человек, сообщение не будет отправлено.",
+    "Ой-ой, не надо такие слова. Сообщение не отправлено.",
+    "Хм, кто-то сегодня сердитый — сообщение не отправлено.",
+    "Стоп! Нельзя так выражаться. Сообщение не отправлено.",
+    "Ну всё, бот в шоке — сообщение не будет передано.",
+    "Эй, возьми себя в руки, сообщение не будет отправлено.",
+    "Хороший тон важнее — сообщение не отправлено.",
+    "Давай без грубостей — сообщение не отправлено.",
+    "Пожалуйста, не ругайся — сообщение не отправлено.",
+    "Ой-ёй, плохие слова! Сообщение не отправлено.",
+    "Ты это серьёзно? Сообщение не будет отправлено.",
+    "Не злись, лучше успокойся — сообщение не отправлено.",
+    "Батя-бот не одобряет — сообщение не отправлено.",
+    "Тихо, шалун! Сообщение не отправлено.",
+    "Серьёзно? Так нельзя. Сообщение не отправлено."
 ]
 
 def reset_counter_if_needed(user_id):
@@ -363,12 +383,16 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем наличие мата
         if has_mat:
-            # Отправляем уведомление USER2 о мате
-            await update.message.reply_text("❌ Содержит плохое слово")
+            # Отправляем смешной случайный ответ USER2 о мате
+            try:
+                reply = random.choice(HUMOROUS_REPLIES)
+            except Exception:
+                reply = "❌ Содержит плохое слово"
+            await update.message.reply_text(reply)
             # Блокируем USER2
             user2_blocked = True
-            # Устанавливаем статус для USER1
-            status_message = "⚠️ Содержит плохое слово"
+            # Используем то же шуточное сообщение в качестве статуса для USER1
+            status_message = reply
         
         # Проверяем, уже ли USER2 заблокирован (после первого мата или 5 сообщений)
         elif user2_blocked:
