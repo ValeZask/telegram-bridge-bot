@@ -353,6 +353,8 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Если отправитель - USER2, проверяем блокировку и лимиты
     global user2_blocked
+    status_message = None  # Переменная для статуса сообщения
+    
     if sender_id == USER2_ID:
         reset_counter_if_needed(sender_id)
         
@@ -362,15 +364,17 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Проверяем наличие мата
         if has_mat:
             # Отправляем уведомление USER2 о мате
-            await update.message.reply_text("❌ Ваш текст содержит нецензурные слова, сообщение не было передано.")
+            await update.message.reply_text("❌ Содержит плохое слово")
             # Блокируем USER2
             user2_blocked = True
-            # Сообщение все равно отправится USER1 (продолжаем выполнение)
+            # Устанавливаем статус для USER1
+            status_message = "⚠️ Содержит плохое слово"
         
         # Проверяем, уже ли USER2 заблокирован (после первого мата или 5 сообщений)
         elif user2_blocked:
-            await update.message.reply_text("❌ Вы достигли ограничения, сообщение не было отправлено.")
-            # Сообщение все равно отправится USER1 (продолжаем выполнение)
+            await update.message.reply_text("❌ Вы достигли лимита")
+            # Устанавливаем статус для USER1
+            status_message = "❌ Достигнут лимит"
         
         # Если не мат и не заблокирован - считаем сообщение
         else:
@@ -378,66 +382,87 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Проверяем, достигнут ли лимит в 5 сообщений
             if message_counter[sender_id] >= 5:
                 user2_blocked = True
+            # Устанавливаем статус для USER1
+            status_message = "✅ Отправлено успешно"
     
     try:
-        # Отправляем сообщение сразу для USER2
+        # Отправляем сообщение USER1 с статусом
         if update.message.text:
+            msg_content = update.message.text
+            msg_to_send = f"{msg_content}\n\n{status_message}" if status_message else msg_content
             await context.bot.send_message(
                 chat_id=receiver_id,
-                text=update.message.text
+                text=msg_to_send
             )
         elif update.message.photo:
             photo = update.message.photo[-1]
             caption = update.message.caption or ""
+            final_caption = f"{caption}\n\n{status_message}" if status_message else caption
             await context.bot.send_photo(
                 chat_id=receiver_id,
                 photo=photo.file_id,
-                caption=caption
+                caption=final_caption
             )
         elif update.message.video:
             caption = update.message.caption or ""
+            final_caption = f"{caption}\n\n{status_message}" if status_message else caption
             await context.bot.send_video(
                 chat_id=receiver_id,
                 video=update.message.video.file_id,
-                caption=caption
+                caption=final_caption
             )
         elif update.message.document:
             caption = update.message.caption or ""
+            final_caption = f"{caption}\n\n{status_message}" if status_message else caption
             await context.bot.send_document(
                 chat_id=receiver_id,
                 document=update.message.document.file_id,
-                caption=caption
+                caption=final_caption
             )
         elif update.message.voice:
             await context.bot.send_voice(
                 chat_id=receiver_id,
                 voice=update.message.voice.file_id
             )
+            if status_message:
+                await context.bot.send_message(
+                    chat_id=receiver_id,
+                    text=status_message
+                )
         elif update.message.audio:
             caption = update.message.caption or ""
+            final_caption = f"{caption}\n\n{status_message}" if status_message else caption
             await context.bot.send_audio(
                 chat_id=receiver_id,
                 audio=update.message.audio.file_id,
-                caption=caption
+                caption=final_caption
             )
         elif update.message.sticker:
             await context.bot.send_sticker(
                 chat_id=receiver_id,
                 sticker=update.message.sticker.file_id
             )
+            if status_message:
+                await context.bot.send_message(
+                    chat_id=receiver_id,
+                    text=status_message
+                )
         elif update.message.video_note:
             await context.bot.send_video_note(
                 chat_id=receiver_id,
                 video_note=update.message.video_note.file_id
             )
+            if status_message:
+                await context.bot.send_message(
+                    chat_id=receiver_id,
+                    text=status_message
+                )
         else:
             await update.message.reply_text("⚠️ Этот тип сообщения пока не поддерживается.")
             return
         
-        # Отправляем подтверждение USER2 если сообщение было успешно отправлено
-        # (только если нет мата и не заблокирован)
-        if not has_mat and not user2_blocked:
-            await update.message.reply_text("✅ Сообщение отправлено!")
+        # Отправляем подтверждение USER2 только если сообщение было успешно отправлено
+        # (это уже сделано выше в блоке if/elif)
         
     except Exception as e:
         logging.error(f"Ошибка при пересылке сообщения: {e}")
