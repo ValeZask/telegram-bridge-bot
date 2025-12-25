@@ -581,7 +581,7 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Увеличиваем счётчик только для не-мат сообщений
             message_counter[sender_id] = message_counter.get(sender_id, 0) + 1
             # Проверяем, достигнут ли дневной лимит
-            if message_counter[sender_id] >= USER2_DAILY_LIMIT:
+            if message_counter[sender_id] > USER2_DAILY_LIMIT:
                 user2_blocked = True
                 try:
                     reply = random.choice(LIMIT_REPLIES)
@@ -595,6 +595,9 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 status_message = f"❌ Достигнут лимит\n{reply}"
             else:
+                # Если достигли лимита (счетчик == лимит), блокируем для следующих сообщений
+                if message_counter[sender_id] == USER2_DAILY_LIMIT:
+                    user2_blocked = True
                 remaining = USER2_DAILY_LIMIT - message_counter.get(sender_id, 0)
                 # Сообщаем USER2 текущий остаток
                 try:
