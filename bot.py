@@ -253,6 +253,45 @@ LIMIT_REPLIES = [
 ]
 
 
+# Список забавных ответов при отправке стикеров с блокировкой
+STICKER_REPLIES = [
+    # Простые отказы
+    "Засуньте стикеры себе в задницу.",
+    "Стикеры больше не принимаются.",
+    "На, держи свой стикер себе.",
+    "Стикер — это не аргумент.",
+    "Стикеры закончились.",
+    
+    # С подъёбом
+    "Ты что, стикерами хочешь спасти ситуацию?",
+    "Стикер не поможет. Лимит остаётся.",
+    "Даже красивый стикер не спасёт тебя от лимита.",
+    "Попробуй выразить мысль без стикеров.",
+    "Стикер туда же, куда и все остальное.",
+    
+    # Грубо
+    "Не приносите стикеры к уже мёртвому коню.",
+    "Стикер — это признак сдачи?",
+    "Забей на стикеры, они тебя не спасут.",
+    "Стикеры не приветствуются после лимита.",
+    "Стикер съём, но отправлять не буду.",
+    
+    # Грязно
+    "Стикер мне в жопу не поместится.",
+    "Твои стикеры мне не нужны.",
+    "Стикер — это последний вздох?",
+    "Спрячь свои стикеры подальше.",
+    "Блокировка даже на стикеры распространяется.",
+    
+    # С ироничностью
+    "О, стикер! Как трогательно.",
+    "Стикер не переубедит лимит.",
+    "Красиво, но нет спасения.",
+    "Стикер ≠ спасение.",
+    "Даже стикер это поняла.",
+]
+
+
 def reset_counter_if_needed(user_id):
     """Сбрасывает счетчик если наступил новый день"""
     today = datetime.now().date()
@@ -477,10 +516,11 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если отправитель - USER2, проверяем блокировку и лимиты
     global user2_blocked
     status_message = None  # Переменная для статуса сообщения
-    
+    blocked_reply_already_sent = False
+
     if sender_id == USER2_ID:
         reset_counter_if_needed(sender_id)
-        
+
         text_to_check = update.message.text or update.message.caption or ""
         has_mat = check_mat(text_to_check)
         
@@ -504,14 +544,22 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Проверяем, уже ли USER2 заблокирован (после достижения дневного лимита)
         elif user2_blocked:
-            # Отправляем смешной случайный ответ USER2 о лимите
-            try:
-                reply = random.choice(LIMIT_REPLIES)
-            except Exception:
-                reply = "❌ Вы достигли лимита"
+            # Если это стикер — даём специфичный ответ про стикер
+            if update.message.sticker:
+                try:
+                    reply = random.choice(STICKER_REPLIES)
+                except Exception:
+                    reply = "❌ Стикеры больше не принимаются"
+            else:
+                # Отправляем смешной случайный ответ USER2 о лимите
+                try:
+                    reply = random.choice(LIMIT_REPLIES)
+                except Exception:
+                    reply = "❌ Вы достигли лимита"
             # Сообщаем и добавляем информацию об остатке (нулевой)
             try:
                 await update.message.reply_text(f"{reply}\n(Лимит) Осталось: 0/{USER2_DAILY_LIMIT}")
+                blocked_reply_already_sent = True
             except Exception:
                 pass
             # Используем статус + шуточное сообщение для USER1
@@ -531,6 +579,7 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Уведомляем USER2 об блокировке и нулевом остатке
                 try:
                     await update.message.reply_text(f"{reply}\n(Лимит) Осталось: 0/{USER2_DAILY_LIMIT}")
+                    blocked_reply_already_sent = True
                 except Exception:
                     pass
                 status_message = f"❌ Достигнут лимит\n{reply}"
@@ -597,15 +646,30 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=final_caption
             )
         elif update.message.sticker:
-            await context.bot.send_sticker(
-                chat_id=receiver_id,
-                sticker=update.message.sticker.file_id
-            )
-            if status_message:
-                await context.bot.send_message(
+            # Если USER2 заблокирован, отправляем смешной ответ про стикер вместо самого стикера
+            if user2_blocked:
+                if not blocked_reply_already_sent:
+                    try:
+                        reply = random.choice(STICKER_REPLIES)
+                    except Exception:
+                        reply = "❌ Стикеры больше не принимаются"
+                    try:
+                        await update.message.reply_text(f"{reply}\n(Лимит) Осталось: 0/{USER2_DAILY_LIMIT}")
+                        blocked_reply_already_sent = True
+                    except Exception:
+                        pass
+                # Если ответ уже был отправлен ранее — ничего не делаем
+            else:
+                # Если не заблокирован, отправляем стикер обычно
+                await context.bot.send_sticker(
                     chat_id=receiver_id,
-                    text=status_message
+                    sticker=update.message.sticker.file_id
                 )
+                if status_message:
+                    await context.bot.send_message(
+                        chat_id=receiver_id,
+                        text=status_message
+                    )
         elif update.message.video_note:
             await context.bot.send_video_note(
                 chat_id=receiver_id,
