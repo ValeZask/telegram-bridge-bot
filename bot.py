@@ -531,16 +531,16 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply = random.choice(HUMOROUS_REPLIES)
             except Exception:
                 reply = "❌ Содержит плохое слово"
-            await update.message.reply_text(reply)
+            # Информируем USER2 об остатке лимита (маты не уменьшают счётчик)
+            remaining = USER2_DAILY_LIMIT - message_counter.get(sender_id, 0)
+            # Объединяем оба сообщения в одно
+            try:
+                await update.message.reply_text(f"{reply}\n(Лимит) Осталось: {remaining}/{USER2_DAILY_LIMIT} сообщений сегодня.")
+            except Exception:
+                pass
             # Маты не учитываются в дневном лимите и не блокируют USER2,
             # однако формируем статус для отправки получателю.
             status_message = f"⚠️ Содержит плохое слово\n{reply}"
-            # Информируем USER2 об остатке лимита (маты не уменьшают счётчик)
-            remaining = USER2_DAILY_LIMIT - message_counter.get(sender_id, 0)
-            try:
-                await update.message.reply_text(f"(Лимит) Осталось: {remaining}/{USER2_DAILY_LIMIT} сообщений сегодня.")
-            except Exception:
-                pass
         
         # Проверяем, уже ли USER2 заблокирован (после достижения дневного лимита)
         elif user2_blocked:
