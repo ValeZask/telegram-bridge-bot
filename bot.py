@@ -21,6 +21,8 @@ logging.basicConfig(
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 USER1_ID = int(os.getenv("USER1_ID"))
 USER2_ID = int(os.getenv("USER2_ID"))
+# Лимит сообщений в сутки для USER2 (можно переопределить через .env)
+USER2_DAILY_LIMIT = int(os.getenv("USER2_DAILY_LIMIT", "7"))
 
 # Счетчик сообщений для USER2
 message_counter = {}
@@ -258,6 +260,11 @@ def reset_counter_if_needed(user_id):
     if user_id not in last_reset_date or last_reset_date[user_id] != today:
         message_counter[user_id] = 0
         last_reset_date[user_id] = today
+        # Если сброс происходит для USER2 — снимаем дневную блокировку
+        global user2_blocked
+        if 'USER2_ID' in globals():
+            if user_id == USER2_ID:
+                user2_blocked = False
 
 def check_mat(text):
     """Проверяет текст на мат с учетом вариаций"""
@@ -490,7 +497,7 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Используем статус + шуточное сообщение для USER1
             status_message = f"⚠️ Содержит плохое слово\n{reply}"
         
-        # Проверяем, уже ли USER2 заблокирован (после первого мата или 5 сообщений)
+        # Проверяем, уже ли USER2 заблокирован (после первого мата или достижения дневного лимита)
         elif user2_blocked:
             # Отправляем смешной случайный ответ USER2 о лимите
             try:
@@ -504,8 +511,8 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Если не мат и не заблокирован - считаем сообщение
         else:
             message_counter[sender_id] = message_counter.get(sender_id, 0) + 1
-            # Проверяем, достигнут ли лимит в 5 сообщений
-            if message_counter[sender_id] >= 5:
+            # Проверяем, достигнут ли лимит в USER2_DAILY_LIMIT сообщений
+            if message_counter[sender_id] >= USER2_DAILY_LIMIT:
                 user2_blocked = True
                 # Отправляем смешной ответ о достижении лимита
                 try:
