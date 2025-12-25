@@ -492,37 +492,55 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 reply = "❌ Содержит плохое слово"
             await update.message.reply_text(reply)
-            # Блокируем USER2
-            user2_blocked = True
-            # Используем статус + шуточное сообщение для USER1
+            # Маты не учитываются в дневном лимите и не блокируют USER2,
+            # однако формируем статус для отправки получателю.
             status_message = f"⚠️ Содержит плохое слово\n{reply}"
+            # Информируем USER2 об остатке лимита (маты не уменьшают счётчик)
+            remaining = USER2_DAILY_LIMIT - message_counter.get(sender_id, 0)
+            try:
+                await update.message.reply_text(f"(Лимит) Осталось: {remaining}/{USER2_DAILY_LIMIT} сообщений сегодня.")
+            except Exception:
+                pass
         
-        # Проверяем, уже ли USER2 заблокирован (после первого мата или достижения дневного лимита)
+        # Проверяем, уже ли USER2 заблокирован (после достижения дневного лимита)
         elif user2_blocked:
             # Отправляем смешной случайный ответ USER2 о лимите
             try:
                 reply = random.choice(LIMIT_REPLIES)
             except Exception:
                 reply = "❌ Вы достигли лимита"
-            await update.message.reply_text(reply)
+            # Сообщаем и добавляем информацию об остатке (нулевой)
+            try:
+                await update.message.reply_text(f"{reply}\n(Лимит) Осталось: 0/{USER2_DAILY_LIMIT}")
+            except Exception:
+                pass
             # Используем статус + шуточное сообщение для USER1
             status_message = f"❌ Достигнут лимит\n{reply}"
         
         # Если не мат и не заблокирован - считаем сообщение
         else:
+            # Увеличиваем счётчик только для не-мат сообщений
             message_counter[sender_id] = message_counter.get(sender_id, 0) + 1
-            # Проверяем, достигнут ли лимит в USER2_DAILY_LIMIT сообщений
+            # Проверяем, достигнут ли дневной лимит
             if message_counter[sender_id] >= USER2_DAILY_LIMIT:
                 user2_blocked = True
-                # Отправляем смешной ответ о достижении лимита
                 try:
                     reply = random.choice(LIMIT_REPLIES)
                 except Exception:
                     reply = "❌ Вы достигли лимита"
-                await update.message.reply_text(reply)
-                # Используем статус + шуточное сообщение для USER1
+                # Уведомляем USER2 об блокировке и нулевом остатке
+                try:
+                    await update.message.reply_text(f"{reply}\n(Лимит) Осталось: 0/{USER2_DAILY_LIMIT}")
+                except Exception:
+                    pass
                 status_message = f"❌ Достигнут лимит\n{reply}"
             else:
+                remaining = USER2_DAILY_LIMIT - message_counter.get(sender_id, 0)
+                # Сообщаем USER2 текущий остаток
+                try:
+                    await update.message.reply_text(f"✅ Отправлено. Осталось: {remaining}/{USER2_DAILY_LIMIT} сообщений сегодня.")
+                except Exception:
+                    pass
                 # Устанавливаем статус для USER1
                 status_message = "✅ Отправлено успешно"
     
