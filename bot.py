@@ -533,6 +533,29 @@ async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset_counter_if_needed(sender_id)
 
         text_to_check = update.message.text or update.message.caption or ""
+        
+        # Проверка на слово "Камелия"
+        if "камелия" in text_to_check.lower():
+            poem = """<i>Пароль подтверждён! Финиш близок совсем,
+Но нужно решить пару мелких проблем.
+Зайди в магазин, там на полках ищи
+Маленький Сникерс — он вместо чеки.</i>
+
+<i>С этим «ключом» ты к тому поспеши,
+Кто в шутках не знает границ и тиши.
+К тому, кто средь смеха и в пылу разговора
+Зовёт тебя гордо — Жопа Дракона!</i>
+
+<i>Сникерс отдай — это честный обмен,
+Чтоб вызволить тайну из папиных стен.
+Взамен он отдаст то, что ты так искала,
+Чтоб точка в сюжете красиво настала!</i>"""
+            try:
+                await update.message.reply_text(poem, parse_mode='HTML')
+            except Exception:
+                pass
+            return
+        
         has_mat = check_mat(text_to_check)
         
         # Проверяем наличие мата
